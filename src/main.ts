@@ -64,6 +64,9 @@ function setToolMode(mode: string): void {
   modeSelectBtn.classList.toggle('active', mode === 'select');
 }
 
+// Set initial tool mode (draw) so canvas and UI are synced at startup
+setToolMode('draw_line');
+
 modeDrawBtn.addEventListener('click', () => setToolMode('draw_line'));
 modeSelectBtn.addEventListener('click', () => {
   setToolMode('select');

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Lines Drawer</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; }
+      #toolbar {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+        display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+        background: #1e1e2e; color: #cdd6f4; font-size: 13px;
+        border-bottom: 1px solid #313244; user-select: none; flex-wrap: wrap;
+      }
+      #toolbar button, #toolbar label {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 10px; background: #313244; color: #cdd6f4; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;
+      }
+      #toolbar button:hover { background: #45475a; }
+      #toolbar button.active { background: #89b4fa; color: #1e1e2e; }
+      #toolbar .sep { width: 1px; height: 20px; background: #313244; margin: 0 2px; }
+      #toolbar input[type="range"] {
+        width: 70px; height: 4px; accent-color: #89b4fa; cursor: pointer;
+      }
+      #toolbar .count-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+        background: #45475a; color: #cdd6f4; font-size: 10px; font-weight: 600;
+      }
+      #toolbar .count-badge.visible { background: #89b4fa; color: #1e1e2e; }
+      /* Context menu */
+      #context-menu {
+        position: fixed; display: none; z-index: 100;
+        background: #313244; border: 1px solid #45475a; border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4); padding: 4px 0; min-width: 160px;
+      }
+      #context-menu.show { display: block; }
+      #context-menu button {
+        display: flex; align-items: center; gap: 8px; width: 100%;
+        padding: 8px 14px; background: transparent; color: #cdd6f4;
+        border: none; cursor: pointer; font-size: 12px; text-align: left;
+      }
+      #context-menu button:hover { background: #45475a; }
+      #context-menu button.danger:hover { background: #f38ba8; color: #1e1e2e; }
+      #canvas-wrap { width: 100vw; height: 100vh; padding-top: 37px; }
+      canvas { display: block; cursor: default; }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar">
+      <span style="font-weight:600;color:#89b4fa;margin-right:4px;">Lines</span>
+      <div class="sep"></div>
+      <button id="mode-draw" class="active" title="Draw lines (D)">✏️ Draw</button>
+      <button id="mode-select" title="Select & manipulate (V)">🖱️ Select <span id="sel-count" class="count-badge"></span></button>
+      <div class="sep"></div>
+      <span style="font-size:11px;">Thickness:</span>
+      <button data-thickness="1">1</button>
+      <button data-thickness="2" class="active">2</button>
+      <button data-thickness="3">3</button>
+      <button data-thickness="5">5</button>
+      <button data-thickness="8">8</button>
+      <div class="sep"></div>
+      <span style="font-size:11px;">Opacity:</span>
+      <input id="opacity-slider" type="range" min="0" max="100" value="100" step="1" title="Line opacity">
+      <span id="opacity-label" style="min-width:32px;font-size:11px;">100%</span>
+      <div class="sep"></div>
+      <span style="font-size:11px;">Color:</span>
+      <input id="color-picker" type="color" value="#000000" title="Line color" style="width:28px;height:22px;padding:0;border:none;cursor:pointer;background:#313244;border-radius:3px;">
+      <div class="sep"></div>
+      <button id="btn-snap" title="Snap to grid (G)">📐 Snap</button>
+      <div class="sep"></div>
+      <button id="btn-shadow" title="Toggle shadow (S)">🌑 Shadow</button>
+      <div class="sep"></div>
+      <button id="btn-undo" title="Undo (Ctrl+Z)">↩️ Undo</button>
+      <button id="btn-redo" title="Redo (Ctrl+Y)">↪️ Redo</button>
+      <div class="sep"></div>
+      <span style="font-size:11px;">Zoom:</span>
+      <button id="btn-zoom-out">−</button>
+      <input id="zoom-input" type="text" value="100%" style="width:56px;padding:3px 4px;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;font-size:12px;text-align:center;" title="Exact zoom (e.g. 150, 2x, 0.5)">
+      <button id="btn-zoom-in">+</button>
+      <span id="zoom-label" style="min-width:48px;text-align:center;font-size:12px;">100%</span>
+      <button id="btn-zoom-fit" title="Fit to content (F)">Fit</button>
+      <button id="btn-zoom-reset">Reset</button>
+      <div class="sep"></div>
+      <button id="btn-clear" class="danger-btn" title="Clear all lines">🗑️ Clear</button>
+    </div>
+    <div id="context-menu">
+      <button id="ctx-duplicate">📋 Duplicate</button>
+      <button id="ctx-delete" class="danger">🗑️ Delete</button>
+      <button id="ctx-clear-selected">❌ Clear Selected</button>
+    </div>
+    <div id="canvas-wrap">
+      <canvas id="canvas"></canvas>
+      <div id="status-bar" style="position:fixed;bottom:8px;left:12px;z-index:10;font-size:11px;color:#a6adc8;background:rgba(30,30,46,0.85);padding:4px 10px;border-radius:4px;pointer-events:none;font-family:ui-monospace,monospace;">
+        <span id="status-coords">x: 0, y: 0</span>
+        <span id="status-line" style="margin-left:16px;display:none;"></span>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

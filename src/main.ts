@@ -302,10 +302,13 @@ const callbacks: InputCallbacks = {
       canvas.style.cursor = 'crosshair';
     }
   },
+  onZoomChanged(_scale: number): void {
+    updateZoomLabel();
+  },
 };
 
 attachMouseHandlers(canvas, store, renderer, callbacks, markDirty);
-attachTouchHandlers(canvas, store, renderer, markDirty);
+attachTouchHandlers(canvas, store, renderer, markDirty, callbacks.onZoomChanged);
 
 
 // --- Keyboard shortcuts -----------------------------------------------------

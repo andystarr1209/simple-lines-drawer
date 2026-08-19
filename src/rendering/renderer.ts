@@ -6,6 +6,7 @@ import type { LineEntity, Point, CameraState, Viewport } from '@/types';
 import type { LineStore } from '@/store';
 import { DEFAULT_COLOR, HANDLE_RADIUS, HANDLE_HIT_THRESHOLD, SELECTED_COLOR, HOVER_COLOR } from '@/constants';
 import { getVisibleCanvasBounds, getGridConfig } from './camera';
+import { distancePointToSegment } from '@/utils/math-utils';
 
 /** Compute canvas-space handle positions for a single line */
 function getLineHandles(line: LineEntity): { start: Point; end: Point; center: Point } {
@@ -14,25 +15,6 @@ function getLineHandles(line: LineEntity): { start: Point; end: Point; center: P
     end: { ...line.end },
     center: { x: (line.start.x + line.end.x) / 2, y: (line.start.y + line.end.y) / 2 },
   };
-}
-
-/** Get canvas-space bounding rect for a single line (expanded by handle radius + hit area) */
-function getLineHitRect(line: LineEntity, threshold: number): { minX: number; minY: number; maxX: number; maxY: number } {
-  const minCX = Math.min(line.start.x, line.end.x) - threshold;
-  const maxCX = Math.max(line.start.x, line.end.x) + threshold;
-  const minCY = Math.min(line.start.y, line.end.y) - threshold;
-  const maxCY = Math.max(line.start.y, line.end.y) + threshold;
-  return { minX: minCX, minY: minCY, maxX: maxCX, maxY: maxCY };
-}
-
-/** Check if a screen-space point is inside an axis-aligned rect in canvas space */
-function pointInCanvasRect(px: number, py: number, rect: { minX: number; minY: number; maxX: number; maxY: number }, cameraScale: number): boolean {
-  return (
-    px >= rect.minX * cameraScale &&
-    px <= rect.maxX * cameraScale &&
-    py >= rect.minY * cameraScale &&
-    py <= rect.maxY * cameraScale
-  );
 }
 
 export class Renderer {
@@ -357,8 +339,17 @@ export class Renderer {
 
   public getHoveredLineId(): string | null { return this._hoveredLineId; }
 
+  public getHoverTarget(): { x: number; y: number } | null {
+    return this._hoverTarget;
+  }
+
   public setHoverTarget(x: number, y: number): void {
     this._hoverTarget = { x, y };
+  }
+
+  public markDirty(): void {
+    // Trigger a re-render by calling the render method
+    this.render();
   }
 
   /** Get canvas-space point from screen coordinates */
@@ -387,27 +378,22 @@ export class Renderer {
 
     for (const line of this.store.getAllLines()) {
       if (this.store.state.selectedLines.has(line.id)) continue;
-      const hitRect = getLineHitRect(line, threshold);
-      if (!pointInCanvasRect(screenX, screenY, hitRect, cam.scale)) continue;
 
-      // Project onto line segment to find closest point
+      // Convert line endpoints to screen space
       const sx1 = line.start.x * cam.scale + cam.offsetX;
       const sy1 = line.start.y * cam.scale + cam.offsetY;
       const sx2 = line.end.x * cam.scale + cam.offsetX;
       const sy2 = line.end.y * cam.scale + cam.offsetY;
 
-      const dx = sx2 - sx1;
-      const dy = sy2 - sy1;
-      const lenSq = dx * dx + dy * dy;
-      if (lenSq < 1e-6) continue;
-      let t = ((screenX - sx1) * dx + (screenY - sy1) * dy) / lenSq;
-      t = Math.max(0, Math.min(1, t));
+      // Use distancePointToSegment for precise hit testing
+      const p = { x: screenX, y: screenY };
+      const a = { x: sx1, y: sy1 };
+      const b = { x: sx2, y: sy2 };
 
-      const closestX = sx1 + t * dx;
-      const closestY = sy1 + t * dy;
-      const dist = Math.sqrt((screenX - closestX) ** 2 + (screenY - closestY) ** 2);
+      // Get distance from point to line segment
+      const dist = distancePointToSegment(p, a, b);
 
-      if (dist < nearestDist && dist <= threshold * cam.scale) {
+      if (dist < nearestDist && dist <= threshold) {
         nearestDist = dist;
         nearestId = line.id;
       }

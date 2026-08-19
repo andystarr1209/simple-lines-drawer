@@ -17,6 +17,8 @@ export interface InputCallbacks {
   onSelectChange(): void;
   /** Called with the hovered line id (or null) to update cursor style */
   onHover(lineId: string | null, isOnHandle: boolean): void;
+  /** Called after zoom operations to update UI label */
+  onZoomChanged(scale: number): void;
 }
 
 /** Callback that the mouse handler calls to signal render needs update */
@@ -241,6 +243,7 @@ export function attachMouseHandlers(
     const factor = e.deltaY > 0 ? 0.9 : (e.ctrlKey ? 2 : 1.1);
     store.zoomAtCursor(factor, sx, sy);
     invalidate();
+    callbacks.onZoomChanged(store.state.camera.scale);
   };
 
   canvas.addEventListener('mousemove', onMouseMove);

@@ -18,6 +18,7 @@ export function attachTouchHandlers(
   store: LineStore,
   _renderer: Renderer,
   invalidate: Invalidate,
+  onZoomChanged?: (scale: number) => void,
 ): () => void {
   const touches = new Map<number, TouchInfo>();
 
@@ -72,6 +73,9 @@ export function attachTouchHandlers(
 
       store.zoomAtCursor(curDist / initDist, (x1 + x2) / 2, (y1 + y2) / 2);
       invalidate();
+      if (onZoomChanged) {
+        onZoomChanged(store.state.camera.scale);
+      }
     }
   };
 

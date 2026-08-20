@@ -103,17 +103,6 @@ export class Renderer {
       }
     }
 
-    // Layer 4.5: selection rect during multi-drag (Phase 6)
-    const dragRect = state.dragRectScreen;
-    if (dragRect) {
-      ctx.save();
-      ctx.setLineDash([6, 4]);
-      ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(dragRect.x1, dragRect.y1, dragRect.x2 - dragRect.x1, dragRect.y2 - dragRect.y1);
-      ctx.restore();
-    }
-
     // Layer 5: handles for active/selected lines (drawn on top)
     const activeId = state.activeLineId;
     if (activeId) {

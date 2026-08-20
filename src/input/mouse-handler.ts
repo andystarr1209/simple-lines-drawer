@@ -59,7 +59,23 @@ export function attachMouseHandlers(
   const onMouseMove = (e: MouseEvent): void => {
     const { sx, sy } = screen(e);
     renderer.setHoverTarget(sx, sy);
-      callbacks.onCursorMove(renderer.screenToCanvas(sx, sy).x, renderer.screenToCanvas(sx, sy).y);
+    callbacks.onCursorMove(renderer.screenToCanvas(sx, sy).x, renderer.screenToCanvas(sx, sy).y);
+
+    // Handle resize during drag
+    if (store.state.resizeState) {
+      const cp = renderer.screenToCanvas(sx, sy);
+      store.updateResize(cp.x, cp.y);
+      invalidate();
+      return;
+    }
+
+    // Handle rotate during drag
+    if (store.state.rotateState) {
+      const cp = renderer.screenToCanvas(sx, sy);
+      store.updateRotate(cp.x, cp.y);
+      invalidate();
+      return;
+    }
 
     if (isMultiSelecting && multiSelectStart) {
       // Draw selection rectangle visualization (handled by re-render)
@@ -72,12 +88,6 @@ export function attachMouseHandlers(
       const dx = sx - dragStartScreen.sx;
       const dy = sy - dragStartScreen.sy;
       store.updatePendingTransform(dx, dy, store.state.camera.scale);
-      // Track selection rect for visual feedback
-      const x1 = dragStartScreen.sx;
-      const y1 = dragStartScreen.sy;
-      const x2 = sx;
-      const y2 = sy;
-      store.setDragRectScreen({ x1: Math.min(x1, x2), y1: Math.min(y1, y2), x2: Math.max(x1, x2), y2: Math.max(y1, y2) });
       invalidate();
       return;
     }
@@ -120,7 +130,8 @@ export function attachMouseHandlers(
       const hit = renderer.findNearestHandleToScreen(sx, sy);
       if (hit) {
         if (hit.side === 'rotate') {
-          store.startRotate(hit.lineId, sx, sy);
+          const cp = canvasPt(sx, sy);
+          store.startRotate(hit.lineId, cp.x, cp.y);
         } else {
           const cp = canvasPt(sx, sy);
           store.startResize(hit.lineId, hit.side, cp.x, cp.y);
@@ -191,6 +202,7 @@ export function attachMouseHandlers(
         }
       }
       drawStart = null;
+      store.setToolMode('select'); // Switch to select mode after drawing
     }
     if (isMultiSelecting && multiSelectScreenPos) {
       isMultiSelecting = false;

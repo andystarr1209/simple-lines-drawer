@@ -14,7 +14,7 @@ export const MAX_ZOOM = 20;
 export const ZOOM_SPEED = 0.1;           // wheel zoom delta multiplier
 
 export const DEFAULT_THICKNESS: LineThickness = 2;
-export const DEFAULT_COLOR = '#000000';
+export const DEFAULT_COLOR = '#ff0000';
 export const SELECTED_COLOR = '#89b4fa';
 export const HOVER_COLOR = '#a6e3a1';
 

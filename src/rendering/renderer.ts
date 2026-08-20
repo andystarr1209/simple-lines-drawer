@@ -103,12 +103,11 @@ export class Renderer {
       }
     }
 
-    // Layer 5: handles for active/selected lines (drawn on top)
-    const activeId = state.activeLineId;
-    if (activeId) {
-      const activeLine = state.lines.get(activeId);
-      if (activeLine) {
-        this.drawHandles(ctx, activeLine, true);
+    // Layer 5: handles for selected lines (drawn on top)
+    // Draw handles for all selected lines
+    for (const line of state.lines.values()) {
+      if (state.selectedLines.has(line.id)) {
+        this.drawHandles(ctx, line, true);
       }
     }
     this.onRender?.(this.canvas.getBoundingClientRect());
@@ -418,33 +417,62 @@ export class Renderer {
     return result;
   }
 
-  /** Find the nearest handle side for a selected/active line */
+  /** Find the nearest handle side for any selected line */
   public findNearestHandleToScreen(
     screenX: number,
     screenY: number,
   ): { lineId: string; side: 'start' | 'end' | 'rotate' } | null {
-    const activeId = this.store.state.activeLineId;
-    if (!activeId) return null;
+    const state = this.store.state;
+    const cam = state.camera;
+    const threshold = HANDLE_HIT_THRESHOLD / cam.scale;
 
-    const line = this.store.state.lines.get(activeId);
-    if (!line) return null;
+    // Check all selected lines, starting with active line
+    const checkedLines = new Set<string>();
+    
+    // First check active line
+    if (state.activeLineId) {
+      const line = state.lines.get(state.activeLineId);
+      if (line) {
+        const result = this.findNearestHandleForLine(line, screenX, screenY, threshold);
+        if (result) return result;
+      }
+    }
+    
+    // Then check all selected lines
+    for (const lineId of state.selectedLines) {
+      if (checkedLines.has(lineId)) continue;
+      checkedLines.add(lineId);
+      const line = state.lines.get(lineId);
+      if (line) {
+        const result = this.findNearestHandleForLine(line, screenX, screenY, threshold);
+        if (result) return result;
+      }
+    }
+    
+    return null;
+  }
 
+  private findNearestHandleForLine(
+    line: LineEntity,
+    screenX: number,
+    screenY: number,
+    threshold: number,
+  ): { lineId: string; side: 'start' | 'end' | 'rotate' } | null {
     const cam = this.store.state.camera;
     const handles = getLineHandles(line);
-    const threshold = HANDLE_HIT_THRESHOLD / cam.scale;
 
     // Start handle
     const startSX = handles.start.x * cam.scale + cam.offsetX;
     const startSY = handles.start.y * cam.scale + cam.offsetY;
     if (Math.sqrt((screenX - startSX) ** 2 + (screenY - startSY) ** 2) <= threshold * cam.scale) {
-      return { lineId: activeId, side: 'start' };
+      return { lineId: line.id, side: 'start' };
     }
 
     // End handle
     const endSX = handles.end.x * cam.scale + cam.offsetX;
     const endSY = handles.end.y * cam.scale + cam.offsetY;
     if (Math.sqrt((screenX - endSX) ** 2 + (screenY - endSY) ** 2) <= threshold * cam.scale) {
-      return { lineId: activeId, side: 'end' };
+      return { lineId: line.id, side: 'end' };
     }
 
     // Rotation handle
@@ -457,10 +485,9 @@ export class Renderer {
       const rotSX = handles.center.x * cam.scale + cam.offsetX + perpX * cam.scale;
       const rotSY = handles.center.y * cam.scale + cam.offsetY + perpY * cam.scale;
       if (Math.sqrt((screenX - rotSX) ** 2 + (screenY - rotSY) ** 2) <= threshold * cam.scale * 1.5) {
-        return { lineId: activeId, side: 'rotate' };
+        return { lineId: line.id, side: 'rotate' };
       }
     }
-
     return null;
   }
 

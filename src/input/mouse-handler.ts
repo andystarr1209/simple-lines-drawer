@@ -15,8 +15,8 @@ export interface InputCallbacks {
   onCursorMove(canvasX: number, canvasY: number): void;
   /** Called for hit-testing and selection state changes */
   onSelectChange(): void;
-  /** Called with the hovered line id (or null) to update cursor style */
-  onHover(lineId: string | null, isOnHandle: boolean): void;
+  /** Called with the hovered line id (or null), whether it's on a handle, and which handle */
+  onHover(lineId: string | null, isOnHandle: boolean, handleSide: 'start' | 'end' | 'rotate' | null): void;
   /** Called after zoom operations to update UI label */
   onZoomChanged(scale: number): void;
 }
@@ -105,11 +105,13 @@ export function attachMouseHandlers(
     // Cursor update on hover
     const hoveredLineId = renderer.getHoveredLineId();
     let isOnHandle = false;
+    let handleSide: 'start' | 'end' | 'rotate' | null = null;
     if (hoveredLineId) {
       const hit = renderer.findNearestHandleToScreen(sx, sy);
       isOnHandle = hit !== null;
+      handleSide = hit?.side ?? null;
     }
-    callbacks.onHover(hoveredLineId, isOnHandle);
+    callbacks.onHover(hoveredLineId, isOnHandle, handleSide);
 
     invalidate();
   };

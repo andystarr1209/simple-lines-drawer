@@ -299,7 +299,10 @@ export function createLineStore(viewportWidth: number, viewportHeight: number): 
       const rs = state.rotateState;
       const ca = Math.atan2(mouseCanvasY-rs.centerPoint.y, mouseCanvasX-rs.centerPoint.x);
       const da = ca - rs.startAngle;
-      const co = Math.cos(da), si = Math.sin(da);
+      // Apply damping factor to slow down rotation
+      const DAMPING = 0.1;
+      const dampedDa = da * DAMPING;
+      const co = Math.cos(dampedDa), si = Math.sin(dampedDa);
       const dsx=line.start.x-rs.centerPoint.x, dsy=line.start.y-rs.centerPoint.y;
       const dex=line.end.x-rs.centerPoint.x, dey=line.end.y-rs.centerPoint.y;
       line.start={x:rs.centerPoint.x+(dsx*co-dsy*si), y:rs.centerPoint.y+(dsx*si+dsy*co)};

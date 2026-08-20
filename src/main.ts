@@ -39,6 +39,9 @@ const store = createLineStore(vpWidth, vpHeight);
 // Initialize renderer
 const renderer = new Renderer(canvas, store);
 
+// Set color picker to default color
+colorPicker.value = store.state.currentColor;
+
 // --- Render loop (requestAnimationFrame) -----------------------------------
 
 let needsRender = false;
@@ -293,11 +296,18 @@ const callbacks: InputCallbacks = {
   onCursorMove(canvasX: number, canvasY: number): void {
     statusCoords.textContent = 'x: ' + Math.round(canvasX) + ', y: ' + Math.round(canvasY);
   },
-  onHover(lineId: string | null, isOnHandle: boolean): void {
+  onHover(lineId: string | null, isOnHandle: boolean, handleSide: 'start' | 'end' | 'rotate' | null): void {
     if (store.state.toolMode === 'select') {
-      if (isOnHandle) canvas.style.cursor = 'grab';
-      else if (lineId) canvas.style.cursor = 'pointer';
-      else canvas.style.cursor = 'default';
+      // Show rotation cursor specifically for rotation handle
+      if (handleSide === 'rotate') {
+        canvas.style.cursor = 'alias'; // rotation cursor
+      } else if (isOnHandle) {
+        canvas.style.cursor = 'grab';
+      } else if (lineId) {
+        canvas.style.cursor = 'pointer';
+      } else {
+        canvas.style.cursor = 'default';
+      }
     } else {
       canvas.style.cursor = 'crosshair';
     }

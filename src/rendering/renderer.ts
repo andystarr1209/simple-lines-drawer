@@ -2,7 +2,7 @@
 // Renderer — canvas setup, DPR-aware drawing, full scene
 // ============================================================
 
-import type { LineEntity, Point, CameraState, Viewport } from '@/types';
+import type { LineEntity, Point, CameraState, Viewport, Gradient } from '@/types';
 import type { LineStore } from '@/store';
 import { DEFAULT_COLOR, HANDLE_RADIUS, HANDLE_HIT_THRESHOLD, SELECTED_COLOR, HOVER_COLOR } from '@/constants';
 import { getVisibleCanvasBounds, getGridConfig } from './camera';
@@ -209,10 +209,35 @@ export class Renderer {
     const sx2 = line.end.x * cam.scale + cam.offsetX;
     const sy2 = line.end.y * cam.scale + cam.offsetY;
 
+    // Helper to create gradient
+    const createGradient = (stops: Gradient) => {
+      const gradient = ctx.createLinearGradient(sx1, sy1, sx2, sy2);
+      let prevOffset = 0;
+      for (const stop of stops) {
+        if (stop.offset > 1) break;
+        gradient.addColorStop(stop.offset, stop.color);
+        prevOffset = stop.offset;
+      }
+      // Fill any gap at the end with the last color
+      if (prevOffset < 1) {
+        const lastColor = stops[stops.length - 1].color;
+        gradient.addColorStop(1, lastColor);
+      }
+      return gradient;
+    };
+
     // Shadow pass (only if enabled on this line)
     if (line.shadowEnabled) {
       ctx.save();
-      ctx.shadowColor = line.shadowColor;
+      
+      let shadowStrokeStyle: string | CanvasGradient;
+      if (line.shadowUseGradient && line.shadowGradientStops && line.shadowGradientStops.length > 0) {
+        shadowStrokeStyle = createGradient(line.shadowGradientStops);
+      } else {
+        shadowStrokeStyle = line.shadowColor;
+      }
+      
+      ctx.shadowColor = shadowStrokeStyle as string;
       ctx.shadowOffsetX = line.shadowOffsetX;
       ctx.shadowOffsetY = line.shadowOffsetY;
       ctx.shadowBlur = line.shadowBlur * cam.scale;
@@ -233,7 +258,8 @@ export class Renderer {
 
     if (isSelected) {
       // Highlight stroke behind
-      ctx.strokeStyle = mainColor;
+      const highlightGradient = createGradient(line.gradientStops);
+      ctx.strokeStyle = highlightGradient;
       ctx.lineWidth = Math.max(2, line.thickness * cam.scale) + 2;
       ctx.globalAlpha = 0.3;
       ctx.beginPath();
@@ -243,17 +269,26 @@ export class Renderer {
       ctx.globalAlpha = 1;
 
       // Main stroke
-      ctx.strokeStyle = mainColor;
+      let mainStrokeStyle: string | CanvasGradient;
+      if (line.useGradient && line.gradientStops && line.gradientStops.length > 0) {
+        mainStrokeStyle = createGradient(line.gradientStops);
+      } else {
+        mainStrokeStyle = mainColor;
+      }
+      ctx.strokeStyle = mainStrokeStyle;
       ctx.lineWidth = Math.max(1, line.thickness * cam.scale);
     } else {
       // Apply opacity to the stroke color
-      const hexToRgba = (hex: string): string => {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return `rgba(${r},${g},${b},${line.opacity})`;
-      };
-      ctx.strokeStyle = hexToRgba(mainColor);
+      let mainStrokeStyle: string | CanvasGradient;
+      if (line.useGradient && line.gradientStops && line.gradientStops.length > 0) {
+        mainStrokeStyle = createGradient(line.gradientStops);
+      } else {
+        const r = parseInt(mainColor.slice(1, 3), 16);
+        const g = parseInt(mainColor.slice(3, 5), 16);
+        const b = parseInt(mainColor.slice(5, 7), 16);
+        mainStrokeStyle = `rgba(${r},${g},${b},${line.opacity})`;
+      }
+      ctx.strokeStyle = mainStrokeStyle;
     }
 
     ctx.beginPath();

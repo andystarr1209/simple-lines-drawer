@@ -4,6 +4,14 @@
 
 export type Color = string;
 
+// Gradient representation: array of { offset: number, color: string }
+export interface GradientStop {
+  offset: number;
+  color: Color;
+}
+
+export type Gradient = GradientStop[];
+
 export interface Point {
   x: number;
   y: number;
@@ -21,6 +29,11 @@ export interface LineEntity {
   shadowOffsetY: number;
   shadowBlur: number;
   shadowColor: Color;
+  // Gradient support
+  useGradient: boolean;
+  gradientStops: Gradient;
+  shadowUseGradient: boolean;
+  shadowGradientStops: Gradient;
 }
 
 export interface LineSnapped {

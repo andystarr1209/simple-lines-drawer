@@ -45,6 +45,51 @@
       #context-menu button.danger:hover { background: #f38ba8; color: #1e1e2e; }
       #canvas-wrap { width: 100vw; height: 100vh; padding-top: 37px; }
       canvas { display: block; cursor: default; }
+      
+      /* Gradient Editor Styles */
+      #gradient-editor {
+        font-family: system-ui, sans-serif;
+      }
+      #gradient-editor button:hover {
+        background: #45475a;
+      }
+      #gradient-editor button:active {
+        background: #585b70;
+      }
+      #stops-container {
+        user-select: none;
+        cursor: pointer;
+      }
+      .color-stop {
+        position: absolute;
+        bottom: 0;
+        width: 20px;
+        height: 100%;
+        transform: translateX(-50%);
+        cursor: pointer;
+        border: 2px solid white;
+        border-radius: 3px 3px 0 0;
+        transition: transform 0.1s;
+      }
+      .color-stop:hover {
+        transform: translateX(-50%) scale(1.1);
+      }
+      .color-stop.active {
+        border-color: #89b4fa;
+        box-shadow: 0 0 10px #89b4fa;
+      }
+      .color-stop::before {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: white;
+        border: 1px solid #1e1e2e;
+      }
     </style>
   </head>
   <body>
@@ -65,8 +110,14 @@
       <input id="opacity-slider" type="range" min="0" max="100" value="100" step="1" title="Line opacity">
       <span id="opacity-label" style="min-width:32px;font-size:11px;">100%</span>
       <div class="sep"></div>
-      <span style="font-size:11px;">Color:</span>
-      <input id="color-picker" type="color" value="#ff0000" title="Line color" style="width:28px;height:22px;padding:0;border:none;cursor:pointer;background:#313244;border-radius:3px;">
+      <div style="display:flex;gap:4px;align-items:center;">
+        <span style="font-size:11px;">Color:</span>
+        <button id="btn-color-mode" title="Toggle solid/gradient">Solid</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;">
+       <input id="color-picker" type="color" value="#ff0000" title="Line color" style="width:28px;height:22px;padding:0;border:none;cursor:pointer;background:#313244;border-radius:3px;">
+       <input id="color-picker-end" type="color" value="#0000ff" title="Gradient end color" style="width:28px;height:22px;padding:0;border:none;cursor:pointer;background:#313244;border-radius:3px;display:none;">
+     </div>
       <div class="sep"></div>
       <button id="btn-snap" title="Snap to grid (G)">📐 Snap</button>
       <div class="sep"></div>
@@ -84,6 +135,23 @@
       <button id="btn-zoom-reset">Reset</button>
       <div class="sep"></div>
       <button id="btn-clear" class="danger-btn" title="Clear all lines">🗑️ Clear</button>
+    </div>
+    
+    <!-- Gradient Editor Overlay -->
+    <div id="gradient-editor" style="position:fixed;bottom:10px;left:50%;transform:translateX(-50%);background:#313244;border:1px solid #45475a;border-radius:6px;padding:10px;display:none;z-index:100;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span style="font-size:11px;font-weight:600;">Gradient Editor</span>
+        <button id="btn-add-stop" style="font-size:11px;padding:2px 6px;background:#45475a;color:#cdd6f4;border:none;border-radius:3px;cursor:pointer;">+ Add Stop</button>
+        <button id="btn-remove-stop" style="font-size:11px;padding:2px 6px;background:#45475a;color:#cdd6f4;border:none;border-radius:3px;cursor:pointer;">- Remove Stop</button>
+      </div>
+      <div id="gradient-preview" style="height:20px;background:linear-gradient(90deg, #ff0000, #0000ff);border-radius:3px;margin-bottom:8px;"></div>
+      <div id="stops-container" style="position:relative;height:30px;background:#1e1e2e;border-radius:3px;overflow:hidden;">
+        <!-- Color stops will be added here -->
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:10px;color:#a6adc8;">
+        <span id="stop-count">0 stops</span>
+        <button id="btn-close-gradient" style="font-size:10px;padding:2px 6px;background:#45475a;color:#cdd6f4;border:none;border-radius:3px;cursor:pointer;">Close</button>
+      </div>
     </div>
     <div id="context-menu">
       <button id="ctx-duplicate">📋 Duplicate</button>

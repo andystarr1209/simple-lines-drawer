@@ -2,6 +2,8 @@
 // Constants — magic numbers, allowed values, defaults
 // ============================================================
 
+import type { Gradient, Point, LineEntity } from '@/types';
+
 export const LINE_THICKNESSES = [1, 2, 3, 5, 8] as const;
 export type LineThickness = (typeof LINE_THICKNESSES)[number];
 
@@ -24,6 +26,18 @@ export const DEFAULT_SHADOW_OFFSET_Y = 3;
 export const DEFAULT_SHADOW_BLUR = 4;
 export const DEFAULT_SHADOW_COLOR = 'rgba(0, 0, 0, 0.5)';
 export const DEFAULT_OPACITY = 1.0;
+
+// Default gradient: simple red to blue
+export const DEFAULT_GRADIENT: Gradient = [
+  { offset: 0, color: '#ff0000' },
+  { offset: 1, color: '#0000ff' }
+];
+
+// Default gradient for shadows
+export const DEFAULT_SHADOW_GRADIENT: Gradient = [
+  { offset: 0, color: 'rgba(0, 0, 0, 0.5)' },
+  { offset: 1, color: 'rgba(0, 0, 0, 0.5)' }
+];
 
 // Grid appearance
 export const GRID_COLOR = '#181825';
@@ -48,4 +62,25 @@ export interface ToolConfig {
   mode: InteractionModeType;
   currentThickness: LineThickness;
   nextLineShadowEnabled: boolean;
+}
+
+// Helper to create a default LineEntity with gradient properties
+export function createDefaultLineEntity(id: string, start: Point, end: Point): LineEntity {
+  return {
+    id,
+    start,
+    end,
+    thickness: DEFAULT_THICKNESS,
+    color: DEFAULT_COLOR,
+    opacity: DEFAULT_OPACITY,
+    shadowEnabled: DEFAULT_SHADOW_ENABLED,
+    shadowOffsetX: DEFAULT_SHADOW_OFFSET_X,
+    shadowOffsetY: DEFAULT_SHADOW_OFFSET_Y,
+    shadowBlur: DEFAULT_SHADOW_BLUR,
+    shadowColor: DEFAULT_SHADOW_COLOR,
+    useGradient: false,
+    gradientStops: DEFAULT_GRADIENT,
+    shadowUseGradient: false,
+    shadowGradientStops: DEFAULT_SHADOW_GRADIENT,
+  };
 }

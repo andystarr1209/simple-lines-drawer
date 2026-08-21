@@ -1,7 +1,7 @@
 // LineStore - central state container & mutations
 import { generateId } from '@/utils/id-utils';
-import type { LineEntity, CameraState, Viewport, PendingTransform, ResizeHandleState, RotateHandleState, Point } from '@/types';
-import { DEFAULT_THICKNESS, DEFAULT_COLOR, DEFAULT_SHADOW_ENABLED, DEFAULT_SHADOW_OFFSET_X, DEFAULT_SHADOW_OFFSET_Y, DEFAULT_SHADOW_BLUR, DEFAULT_SHADOW_COLOR, DEFAULT_OPACITY, MIN_ZOOM, MAX_ZOOM } from '@/constants';
+import type { LineEntity, CameraState, Viewport, PendingTransform, ResizeHandleState, RotateHandleState, Point, Gradient } from '@/types';
+import { DEFAULT_THICKNESS, DEFAULT_COLOR, DEFAULT_SHADOW_ENABLED, DEFAULT_SHADOW_OFFSET_X, DEFAULT_SHADOW_OFFSET_Y, DEFAULT_SHADOW_BLUR, DEFAULT_SHADOW_COLOR, DEFAULT_OPACITY, MIN_ZOOM, MAX_ZOOM, DEFAULT_GRADIENT, DEFAULT_SHADOW_GRADIENT } from '@/constants';
 import { getGridCellSize } from '@/rendering/camera';
 
 export interface LineStoreState {
@@ -20,6 +20,9 @@ export interface LineStoreState {
   dragRectScreen: { x1: number; y1: number; x2: number; y2: number } | null;
   currentColor: string;
   snapToGrid: boolean;
+  currentGradient: Gradient;
+  currentShadowGradient: Gradient;
+  useGradientForNewLines: boolean;
 }
 
 export interface LineStore {
@@ -39,6 +42,11 @@ export interface LineStore {
   setCurrentOpacity(opacity: number): void;
   getCurrentOpacity(): number;
   setNextLineShadowEnabled(enabled: boolean): void;
+  setLineGradient(lineId: string, stops: Gradient): void;
+  setLineUseGradient(lineId: string, useGradient: boolean): void;
+  setShadowGradient(lineId: string, stops: Gradient): void;
+  setShadowUseGradient(lineId: string, useGradient: boolean): void;
+  setGradientMode(enabled: boolean): void;
   zoomToFit(): void;
   setActiveLine(id: string | null): void;
   clearSelection(): void;
@@ -62,6 +70,10 @@ export interface LineStore {
   setSnapToGrid(enabled: boolean): void;
   getSnappedEndPoint(): Point | null;
   snappedEndpoints(screenX1: number, screenY1: number, screenX2: number, screenY2: number): { startX: number; startY: number; endX: number; endY: number } | null;
+  setCurrentGradient(gradient: Gradient): void;
+  setCurrentGradientStart(color: string): void;
+  setCurrentGradientEnd(color: string): void;
+  setCurrentShadowGradient(gradient: Gradient): void;
 }
 
 interface UndoSnapshot { lines: Map<string, LineEntity>; currentOpacity: number; currentColor: string; }
@@ -86,6 +98,9 @@ export function createLineStore(viewportWidth: number, viewportHeight: number): 
     dragRectScreen: null,
     currentColor: DEFAULT_COLOR,
     snapToGrid: false,
+    currentGradient: DEFAULT_GRADIENT,
+    currentShadowGradient: DEFAULT_SHADOW_GRADIENT,
+    useGradientForNewLines: false,
   };
   let undoStack: UndoSnapshot[] = [];
   let redoStack: UndoSnapshot[] = [];
@@ -109,6 +124,10 @@ export function createLineStore(viewportWidth: number, viewportHeight: number): 
         shadowOffsetX: DEFAULT_SHADOW_OFFSET_X, shadowOffsetY: DEFAULT_SHADOW_OFFSET_Y,
         shadowBlur: DEFAULT_SHADOW_BLUR, shadowColor: DEFAULT_SHADOW_COLOR,
         opacity: state.currentOpacity,
+        useGradient: state.useGradientForNewLines,
+        gradientStops: state.useGradientForNewLines ? state.currentGradient.map((s) => ({ ...s })) : DEFAULT_GRADIENT,
+        shadowUseGradient: state.useGradientForNewLines,
+        shadowGradientStops: state.useGradientForNewLines ? state.currentShadowGradient.map((s) => ({ ...s })) : DEFAULT_SHADOW_GRADIENT,
       });
       return id;
     },
@@ -148,11 +167,30 @@ export function createLineStore(viewportWidth: number, viewportHeight: number): 
     setToolMode(mode: string): void { state.toolMode = mode; },
     setCurrentThickness(t: number): void { state.currentThickness = t; },
     setNextLineShadowEnabled(en: boolean): void { state.nextLineShadowEnabled = en; },
-
+    setGradientMode(enabled: boolean): void {
+        // Toggle affects ONLY newly drawn lines. Existing lines keep their
+        // own solid/gradient state and colors, so switching the mode does not
+        // retroactively change any already-drawn line.
+      state.useGradientForNewLines = enabled;
+     },
+    setLineGradient(lineId: string, stops: Gradient): void {
+      const line = state.lines.get(lineId);
+      if (line) { line.gradientStops = stops; pushUndo(); }
+    },
+    setLineUseGradient(lineId: string, useGradient: boolean): void {
+      const line = state.lines.get(lineId);
+      if (line) { line.useGradient = useGradient; pushUndo(); }
+    },
+    setShadowGradient(lineId: string, stops: Gradient): void {
+      const line = state.lines.get(lineId);
+      if (line) { line.shadowGradientStops = stops; pushUndo(); }
+    },
+    setShadowUseGradient(lineId: string, useGradient: boolean): void {
+      const line = state.lines.get(lineId);
+      if (line) { line.shadowUseGradient = useGradient; pushUndo(); }
+    },
     setCurrentOpacity(opacity: number): void { state.currentOpacity = Math.max(0, Math.min(1, opacity)); pushUndo(); },
-
     getCurrentOpacity(): number { return state.currentOpacity; },
-
     zoomToFit(): void {
       const lines = [...state.lines.values()];
       if (lines.length === 0) {
@@ -184,8 +222,6 @@ export function createLineStore(viewportWidth: number, viewportHeight: number): 
     clearSelection(): void {
       state.activeLineId = null; state.selectedLines.clear();
     },
-
-
     startPendingTransform(lineIds: string[], mouseCanvasX: number, mouseCanvasY: number): void {
       const positions = new Map<string, { start:{x:number;y:number}; end:{x:number;y:number} }>();
       for (const id of lineIds) {
@@ -217,54 +253,9 @@ export function createLineStore(viewportWidth: number, viewportHeight: number): 
       }
       state.pendingTransform = null;
     },
-
     setDragRectScreen(rect: { x1: number; y1: number; x2: number; y2: number } | null): void {
       state.dragRectScreen = rect;
     },
-
-    snapPoint(canvasX: number, canvasY: number): Point {
-      if (!state.snapToGrid) return { x: canvasX, y: canvasY };
-      const cellSize = getGridCellSize(state.camera);
-      const snappedX = Math.round(canvasX / cellSize) * cellSize;
-      const snappedY = Math.round(canvasY / cellSize) * cellSize;
-      return { x: snappedX, y: snappedY };
-    },
-
-    setCurrentColor(color: string): void {
-      state.currentColor = color; pushUndo();
-    },
-
-    setSnapToGrid(enabled: boolean): void {
-      state.snapToGrid = enabled;
-    },
-
-    getSnappedEndPoint(): Point | null {
-      if (!state.snapToGrid || !state.activeLineId) return null;
-      const line = state.lines.get(state.activeLineId);
-      if (!line) return null;
-      const cellSize = getGridCellSize(state.camera);
-      const snappedEndX = Math.round(line.end.x / cellSize) * cellSize;
-      const snappedEndY = Math.round(line.end.y / cellSize) * cellSize;
-      return { x: snappedEndX, y: snappedEndY };
-    },
-
-    snappedEndpoints(screenX1: number, screenY1: number, screenX2: number, screenY2: number): { startX: number; startY: number; endX: number; endY: number } | null {
-      if (!state.snapToGrid) return null;
-      const invScale = 1 / state.camera.scale;
-      const c1x = (screenX1 - state.camera.offsetX) * invScale;
-      const c1y = (screenY1 - state.camera.offsetY) * invScale;
-      const c2x = (screenX2 - state.camera.offsetX) * invScale;
-      const c2y = (screenY2 - state.camera.offsetY) * invScale;
-      const cellSize = getGridCellSize(state.camera);
-      return {
-        startX: Math.round(c1x / cellSize) * cellSize,
-        startY: Math.round(c1y / cellSize) * cellSize,
-        endX: Math.round(c2x / cellSize) * cellSize,
-        endY: Math.round(c2y / cellSize) * cellSize,
-      };
-    },
-
-
     startResize(lineId: string, side: 'start' | 'end', _mouseCanvasX: number, _mouseCanvasY: number): void {
       const line = state.lines.get(lineId); if (!line) return;
       const hp = side === 'start' ? {...line.start} : {...line.end};
@@ -285,7 +276,6 @@ export function createLineStore(viewportWidth: number, viewportHeight: number): 
       }
       state.resizeState = null;
     },
-
     startRotate(lineId: string, mouseCanvasX: number, mouseCanvasY: number): void {
       const line = state.lines.get(lineId); if (!line) return;
       const cx=(line.start.x+line.end.x)/2, cy=(line.start.y+line.end.y)/2;
@@ -310,13 +300,11 @@ export function createLineStore(viewportWidth: number, viewportHeight: number): 
     },
     commitRotate(): void { state.rotateState = null; },
     cancelRotate(): void { state.rotateState = null; },
-
     updateViewport(width: number, height: number): void {
       if (state.viewport.width !== width || state.viewport.height !== height) {
         state.viewport = { width, height };
       }
     },
-
     undo(): void {
       if (!undoStack.length) return;
       redoStack.push({ lines: new Map(state.lines), currentOpacity: state.currentOpacity, currentColor: state.currentColor });
@@ -332,10 +320,73 @@ export function createLineStore(viewportWidth: number, viewportHeight: number): 
       state.lines.clear(); n.lines.forEach((v,k)=>state.lines.set(k,v));
       state.currentOpacity = n.currentOpacity;
       state.currentColor = n.currentColor;
-
+    },
+    snapPoint(canvasX: number, canvasY: number): Point {
+      if (!state.snapToGrid) return { x: canvasX, y: canvasY };
+      const cellSize = getGridCellSize(state.camera);
+      const snappedX = Math.round(canvasX / cellSize) * cellSize;
+      const snappedY = Math.round(canvasY / cellSize) * cellSize;
+      return { x: snappedX, y: snappedY };
+    },
+    setCurrentColor(color: string): void {
+      state.currentColor = color; pushUndo();
+    },
+    setSnapToGrid(enabled: boolean): void {
+      state.snapToGrid = enabled;
+    },
+    getSnappedEndPoint(): Point | null {
+      if (!state.snapToGrid || !state.activeLineId) return null;
+      const line = state.lines.get(state.activeLineId);
+      if (!line) return null;
+      const cellSize = getGridCellSize(state.camera);
+      const snappedEndX = Math.round(line.end.x / cellSize) * cellSize;
+      const snappedEndY = Math.round(line.end.y / cellSize) * cellSize;
+      return { x: snappedEndX, y: snappedEndY };
+    },
+    snappedEndpoints(screenX1: number, screenY1: number, screenX2: number, screenY2: number): { startX: number; startY: number; endX: number; endY: number } | null {
+      if (!state.snapToGrid) return null;
+      const invScale = 1 / s();
+      const c1x = (screenX1 - ox()) * invScale;
+      const c1y = (screenY1 - oy()) * invScale;
+      const c2x = (screenX2 - ox()) * invScale;
+      const c2y = (screenY2 - oy()) * invScale;
+      const cellSize = getGridCellSize(state.camera);
+      return {
+        startX: Math.round(c1x / cellSize) * cellSize,
+        startY: Math.round(c1y / cellSize) * cellSize,
+        endX: Math.round(c2x / cellSize) * cellSize,
+        endY: Math.round(c2y / cellSize) * cellSize,
+      };
+    },
+    setCurrentGradient(gradient: Gradient): void {
+      state.currentGradient = gradient;
+    },
+    setCurrentGradientStart(color: string): void {
+      const stops = state.currentGradient.map((s) => ({ ...s }));
+      if (stops.length === 0) {
+        stops.push({ offset: 0, color });
+        stops.push({ offset: 1, color });
+       } else {
+        stops[0] = { ...stops[0], offset: 0, color };
+       }
+      state.currentGradient = stops;
+      pushUndo();
+     },
+    setCurrentGradientEnd(color: string): void {
+      const stops = state.currentGradient.map((s) => ({ ...s }));
+      if (stops.length === 0) {
+        stops.push({ offset: 0, color });
+        stops.push({ offset: 1, color });
+       } else {
+        const last = stops.length - 1;
+        stops[last] = { ...stops[last], offset: 1, color };
+       }
+      state.currentGradient = stops;
+      pushUndo();
+     },
+    setCurrentShadowGradient(gradient: Gradient): void {
+      state.currentShadowGradient = gradient;
     },
   };
-
   return store;
 }
-

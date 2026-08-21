@@ -13,6 +13,7 @@ const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const modeDrawBtn = document.getElementById('mode-draw') as HTMLButtonElement;
 const modeSelectBtn = document.getElementById('mode-select') as HTMLButtonElement;
 const colorPicker = document.getElementById('color-picker') as HTMLInputElement;
+const colorPickerEnd = document.getElementById('color-picker-end') as HTMLInputElement;
 const snapBtn = document.getElementById('btn-snap') as HTMLButtonElement;
 const shadowBtn = document.getElementById('btn-shadow') as HTMLButtonElement;
 const zoomInBtn = document.getElementById('btn-zoom-in') as HTMLButtonElement;
@@ -39,8 +40,9 @@ const store = createLineStore(vpWidth, vpHeight);
 // Initialize renderer
 const renderer = new Renderer(canvas, store);
 
-// Set color picker to default color
+// Set color pickers to default colors
 colorPicker.value = store.state.currentColor;
+colorPickerEnd.value = store.state.currentGradient[store.state.currentGradient.length - 1]?.color ?? '#0000ff';
 
 // --- Render loop (requestAnimationFrame) -----------------------------------
 
@@ -88,10 +90,74 @@ document.querySelectorAll('[data-thickness]').forEach((btn) => {
   });
 });
 
-// Color picker
-colorPicker.addEventListener('input', () => {
-  store.setCurrentColor(colorPicker.value);
+// Color mode toggle button (Solid/Gradient)
+const colorModeBtn = document.getElementById('btn-color-mode') as HTMLButtonElement;
+let isGradientMode = false;
+
+colorModeBtn.addEventListener('click', () => {
+  isGradientMode = !isGradientMode;
+  colorModeBtn.textContent = isGradientMode ? 'Gradient' : 'Solid';
+  colorModeBtn.classList.toggle('active', isGradientMode);
+  colorPickerEnd.style.display = isGradientMode ? '' : 'none';
+  // Update all lines to use gradient mode if enabled
+  store.setGradientMode(isGradientMode);
   markDirty();
+});
+
+// Helpers: apply a start/end color to the active line's gradient stops, or
+// to the default gradient used for new lines when nothing is active.
+function ensureTwoStops(color: string) {
+  const activeLineId = store.state.activeLineId;
+  if (!activeLineId) return null;
+  const line = store.getLine(activeLineId);
+  if (!line) return null;
+  const stops = line.gradientStops.map((s) => ({ ...s }));
+  if (stops.length === 0) {
+    stops.push({ offset: 0, color });
+    stops.push({ offset: 1, color });
+    } else if (stops.length === 1) {
+    stops.push({ offset: 1, color: stops[0].color });
+    }
+  return { id: activeLineId, stops };
+}
+
+function applyStartColor(color: string): void {
+  const target = ensureTwoStops(color);
+  if (target) {
+    target.stops[0] = { ...target.stops[0], offset: 0, color };
+    store.setLineGradient(target.id, target.stops);
+    markDirty();
+    } else {
+    store.setCurrentGradientStart(color);
+    }
+}
+
+function applyEndColor(color: string): void {
+  const target = ensureTwoStops(color);
+  if (target) {
+    const last = target.stops.length - 1;
+    target.stops[last] = { ...target.stops[last], offset: 1, color };
+    store.setLineGradient(target.id, target.stops);
+    markDirty();
+    } else {
+    store.setCurrentGradientEnd(color);
+    }
+}
+
+// Start color picker - solid color in Solid mode, start stop in Gradient mode
+colorPicker.addEventListener('input', () => {
+  if (isGradientMode) {
+    applyStartColor(colorPicker.value);
+    } else {
+    store.setCurrentColor(colorPicker.value);
+    }
+});
+
+// End color picker - only meaningful in Gradient mode
+colorPickerEnd.addEventListener('input', () => {
+  if (isGradientMode) {
+    applyEndColor(colorPickerEnd.value);
+    }
 });
 
 // Snap to grid toggle
